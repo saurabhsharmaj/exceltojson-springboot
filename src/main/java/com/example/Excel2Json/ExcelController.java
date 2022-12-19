@@ -2,45 +2,30 @@ package com.example.Excel2Json;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.json.simple.JSONObject;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.MapDifference;
-import com.google.common.collect.Maps;
-
 @RestController
 public class ExcelController {
 
-	@Autowired
-	ObjectMapper mapper;
-
-	TypeReference<HashMap<String, Object>> type = new TypeReference<HashMap<String, Object>>() {
-	};
-
 	@PostMapping("/excel")
-	public String getExcel(@RequestParam("data") MultipartFile[] data) {
-		excel2Json(data);
-		return "Success";
+	public List<JSONObject> getExcel(@RequestParam("local") MultipartFile local,@RequestParam("remote") MultipartFile remote, @RequestParam("name") String columnName) {
+		return excel2Json(new MultipartFile[] {local,remote},columnName);
 	}
 
-	public void excel2Json(MultipartFile[] data) {
+	public List<JSONObject> excel2Json(MultipartFile[] data,String matchColumnName) {
 
-		List<JSONObject> dataList = new ArrayList<>();
 		List<JSONObject> dataList1 = new ArrayList<>();
+		List<JSONObject> dataList2 = new ArrayList<>();
 
 		for (int a = 0; a < data.length; a++) {
 			XSSFWorkbook workbook = null;
@@ -61,44 +46,73 @@ public class ExcelController {
 					rowJsonObject.put(columnName, columnValue);
 				}
 				if (a == 0) {
-					dataList.add(rowJsonObject);
-				} else {
 					dataList1.add(rowJsonObject);
+				} else {
+					dataList2.add(rowJsonObject);
 				}
 
 			}
 		}
-		System.out.println("first file : " + dataList);
-		System.out.println("second file : " + dataList1);
+		System.out.println("first file : " + dataList1);
+		System.out.println("second file : " + dataList2);
 
-		try {
-			String leftJson = "{\"name\":\"John\", \"age\":30, \"car\":null}";
-			String rightJson = "{\"name\":\"John\", \"age\":30, \"car\":null}";
-			Map<String, Object> leftMap = mapper.readValue(leftJson, type);
-			Map<String, Object> rightMap = mapper.readValue(rightJson, type);
-
-			MapDifference<String, Object> compareJsonObject = compareJsonObject(leftMap, rightMap);
-			System.out.println(compareJsonObject);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+		List<JSONObject> result=new ArrayList<JSONObject>();
+		List<JSONObject> matched=matchStream(dataList1, dataList2, matchColumnName);
+		result.addAll(matched);
 		
-		List<JSONObject> result=createSharedListViaStream(dataList, dataList1, "id");
-		result.stream().distinct().forEach(System.err::println); 
+		List<JSONObject> removed=removedStream(dataList1, dataList2, matchColumnName);
+		result.addAll(removed);
+		
+		List<JSONObject> added=addedStream(dataList1, dataList2, matchColumnName);
+		result.addAll(added);
+		
+		matched.stream().distinct().forEach(System.err::println); 
+		return result.stream().distinct().collect(Collectors.toList());
 	}
 
-	public static List<JSONObject> createSharedListViaStream(List<JSONObject> listOne, List<JSONObject> listTwo, String fieldName)
+	public static List<JSONObject> matchStream(List<JSONObject> listOne, List<JSONObject> listTwo, String fieldName)
 	{
 		
 	    List<JSONObject> listOneList = listOne.stream()
 	    .filter(two -> listTwo.stream()
 	        .anyMatch(one -> one.containsKey(fieldName) && two.get(fieldName).equals(one.get(fieldName))))
+	    .map(s -> {
+	    	s.put("actionType","EQUAL");
+	    	return s;
+	    })
 	    .collect(Collectors.toList());
 	    return listOneList;
 	}
 	
-	MapDifference<String, Object> compareJsonObject(Map<String, Object> leftMap, Map<String, Object> rightMap) {
-		return Maps.difference(leftMap, rightMap);
+	public static List<JSONObject> addedStream(List<JSONObject> listOne, List<JSONObject> listTwo, String fieldName)
+	{
+		
+	    List<JSONObject> listOneList = listOne.stream()
+	    .filter(two -> listTwo.stream()
+	        .anyMatch(one -> one.containsKey(fieldName) && two.get(fieldName).equals(one.get(fieldName)))==false)
+	    .map(s -> {
+	    	s.put("actionType","ADDED");
+	    	return s;
+	    })
+	    .collect(Collectors.toList());
+	    return listOneList;
 	}
+	
+	public static List<JSONObject> removedStream(List<JSONObject> listOne, List<JSONObject> listTwo, String fieldName)
+	{
+		
+	    List<JSONObject> listOneList = listTwo.stream()
+	    .filter(two -> listOne.stream()
+	        .anyMatch(one -> one.containsKey(fieldName) && two.get(fieldName).equals(one.get(fieldName)))==false)
+	    .map(s -> {
+	    	s.put("actionType","REMOVED");
+	    	return s;
+	    })
+	    .collect(Collectors.toList());
+	    return listOneList;
+	}
+	
+
+	
 
 }
