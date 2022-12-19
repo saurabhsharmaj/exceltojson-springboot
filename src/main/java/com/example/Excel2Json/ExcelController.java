@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -16,9 +17,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.MapDifference;
 import com.google.common.collect.Maps;
@@ -83,8 +82,21 @@ public class ExcelController {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		
+		List<JSONObject> result=createSharedListViaStream(dataList, dataList1, "id");
+		result.stream().distinct().forEach(System.err::println); 
 	}
 
+	public static List<JSONObject> createSharedListViaStream(List<JSONObject> listOne, List<JSONObject> listTwo, String fieldName)
+	{
+		
+	    List<JSONObject> listOneList = listOne.stream()
+	    .filter(two -> listTwo.stream()
+	        .anyMatch(one -> one.containsKey(fieldName) && two.get(fieldName).equals(one.get(fieldName))))
+	    .collect(Collectors.toList());
+	    return listOneList;
+	}
+	
 	MapDifference<String, Object> compareJsonObject(Map<String, Object> leftMap, Map<String, Object> rightMap) {
 		return Maps.difference(leftMap, rightMap);
 	}
