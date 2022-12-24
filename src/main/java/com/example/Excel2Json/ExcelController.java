@@ -165,6 +165,16 @@ public class ExcelController {
 
 		List<JSONObject> result = new ArrayList<JSONObject>();
 		
+		List<JSONObject> removed = remote.stream()
+	    	    .filter(rr -> local.stream()
+	    		        .noneMatch(ll->fetchRemoved(ll,rr,columns)))
+	    		    .map(s -> {
+	    		    	s.put("actionType","REMOVED");
+	    		    	return s;
+	    		    })
+	    		    .collect(Collectors.toList());
+	    result.addAll(removed);
+	    
 		List<JSONObject> added = local.stream()
 	    	    .filter(ll -> remote.stream()
 	    		        .noneMatch(rr->fetchAdded(rr,ll,columns)))
@@ -199,6 +209,11 @@ public class ExcelController {
 
 	    return result.stream().distinct().collect(Collectors.toList());
 	}
+	
+	private static boolean fetchRemoved(JSONObject local, JSONObject remote, List<Column> columns) {
+		return columns.stream().anyMatch(c-> local.get(c.getLocalColName()).equals(remote.get(c.getRemoteColName())));
+	}
+	
 	
 	private static boolean fetchAdded(JSONObject local, JSONObject remote, List<Column> columns) {
 		return columns.stream().allMatch(c-> local.get(c.getLocalColName()).equals(remote.get(c.getRemoteColName())));
