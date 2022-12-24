@@ -150,8 +150,8 @@ public class ExcelController {
 		exlReq.setColumn(createCompareColumn());
 		JSONObject excel = new JSONObject();
 		//excel.put("compare", exlReq);
-		excel.put("local", local);
-		excel.put("remote", remote);
+		//excel.put("local", local);
+		//excel.put("remote", remote);
 		
 		List<JSONObject> result=compareExcel(local,remote,exlReq.getColumn());
 		excel.put("result", result);
@@ -164,9 +164,20 @@ public class ExcelController {
 	private static List<JSONObject> compareExcel(List<JSONObject> local, List<JSONObject> remote, List<Column> columns) {
 
 		List<JSONObject> result = new ArrayList<JSONObject>();
+		
+		List<JSONObject> added = local.stream()
+	    	    .filter(ll -> remote.stream()
+	    		        .noneMatch(rr->fetchAdded(rr,ll,columns)))
+	    		    .map(s -> {
+	    		    	s.put("actionType","ADDED");
+	    		    	return s;
+	    		    })
+	    		    .collect(Collectors.toList());
+	    result.addAll(added);
+	    
 	    List<JSONObject> equal = local.stream()
-	    	    .filter(two -> remote.stream()
-	    		        .anyMatch(one->fetchEqual(one,two,columns)))
+	    	    .filter(ll -> remote.stream()
+	    		        .anyMatch(rr->fetchEqual(rr,ll,columns)))
 	    		    .map(s -> {
 	    		    	s.put("actionType","EQUAL");
 	    		    	return s;
@@ -175,8 +186,8 @@ public class ExcelController {
 	    result.addAll(equal);
 	    
 	    List<JSONObject> modified = local.stream()
-	    	    .filter(two -> remote.stream()
-	    		        .anyMatch(one->fetchModified(one,two,columns)))
+	    	    .filter(ll -> remote.stream()
+	    		        .anyMatch(rr->fetchModified(rr,ll,columns)))
 	    		    .map(s -> {
 	    		    	s.put("actionType","MODIFIED");
 	    		    	return s;
@@ -184,11 +195,18 @@ public class ExcelController {
 	    		    .collect(Collectors.toList());
 	    
 	    result.addAll(modified);
-	    return result;
+	    
+
+	    return result.stream().distinct().collect(Collectors.toList());
 	}
+	
+	private static boolean fetchAdded(JSONObject local, JSONObject remote, List<Column> columns) {
+		return columns.stream().allMatch(c-> local.get(c.getLocalColName()).equals(remote.get(c.getRemoteColName())));
+	}
+	
 
 	private static boolean fetchModified(JSONObject local, JSONObject remote, List<Column> columns) {
-		if(columns.stream().allMatch(c-> local.get(c.getLocalColName()).equals(remote.get(c.getRemoteColName())))==false) {
+		if(fetchEqual(local, remote, columns)==false) {
 			return columns.stream().anyMatch(c-> local.get(c.getLocalColName()).equals(remote.get(c.getRemoteColName())));
 		}
 		return false;
