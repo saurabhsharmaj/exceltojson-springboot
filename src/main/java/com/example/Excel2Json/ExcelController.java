@@ -1,5 +1,7 @@
 package com.example.Excel2Json;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -126,7 +128,93 @@ public class ExcelController {
 	    return listOneList;
 	}
 	
+	private static List<Column> createCompareColumn() {
+		List<Column> list = new ArrayList<Column>();
+		Column col1= new Column();
+		col1.setLocalColName("FirstName");
+		col1.setRemoteColName("FirstName");
+		list.add(col1);
+		
+		Column col2= new Column();
+		col2.setLocalColName("LastName");
+		col2.setRemoteColName("LastName");
+		list.add(col2);
+		return list;
+	}
 
+	public static void main(String[] args) throws Exception {
+
+		List<JSONObject> local = excelToJSON(new FileInputStream(new File("D:\\projects\\exceltojson-springboot\\ll.xlsx")));
+		List<JSONObject> remote = excelToJSON(new FileInputStream(new File("D:\\projects\\exceltojson-springboot\\rr.xlsx")));
+		ExcelRequest exlReq= new ExcelRequest();
+		exlReq.setColumn(createCompareColumn());
+		JSONObject excel = new JSONObject();
+		//excel.put("compare", exlReq);
+		excel.put("local", local);
+		excel.put("remote", remote);
+		
+		List<JSONObject> result=compareExcel(local,remote,exlReq.getColumn());
+		excel.put("result", result);
+		System.out.println(excel);
+		
+	}
+
+	
+
+	private static List<JSONObject> compareExcel(List<JSONObject> local, List<JSONObject> remote, List<Column> columns) {
+
+		List<JSONObject> result = new ArrayList<JSONObject>();
+	    List<JSONObject> equal = local.stream()
+	    	    .filter(two -> remote.stream()
+	    		        .anyMatch(one->fetchEqual(one,two,columns)))
+	    		    .map(s -> {
+	    		    	s.put("actionType","EQUAL");
+	    		    	return s;
+	    		    })
+	    		    .collect(Collectors.toList());
+	    result.addAll(equal);
+	    
+	    List<JSONObject> modified = local.stream()
+	    	    .filter(two -> remote.stream()
+	    		        .anyMatch(one->fetchModified(one,two,columns)))
+	    		    .map(s -> {
+	    		    	s.put("actionType","MODIFIED");
+	    		    	return s;
+	    		    })
+	    		    .collect(Collectors.toList());
+	    
+	    result.addAll(modified);
+	    return result;
+	}
+
+	private static boolean fetchModified(JSONObject local, JSONObject remote, List<Column> columns) {
+		if(columns.stream().allMatch(c-> local.get(c.getLocalColName()).equals(remote.get(c.getRemoteColName())))==false) {
+			return columns.stream().anyMatch(c-> local.get(c.getLocalColName()).equals(remote.get(c.getRemoteColName())));
+		}
+		return false;
+	}
+	
+	private static boolean fetchEqual(JSONObject local, JSONObject remote, List<Column> columns) {		
+		return columns.stream().allMatch(c-> local.get(c.getLocalColName()).equals(remote.get(c.getRemoteColName())));
+	}
+
+	private static List<JSONObject> excelToJSON(FileInputStream local) throws IOException {
+		List<JSONObject> list= new ArrayList<JSONObject>();
+		XSSFWorkbook workbook = new XSSFWorkbook(local);		
+		XSSFSheet workSheet = workbook.getSheetAt(0);
+		XSSFRow header = workSheet.getRow(0);
+		for (int i = 1; i < workSheet.getPhysicalNumberOfRows(); i++) {
+			XSSFRow row = workSheet.getRow(i);
+			JSONObject rowJsonObject = new JSONObject();
+			for (int j = 0; j < row.getPhysicalNumberOfCells(); j++) {
+				String columnName = header.getCell(j).toString();
+				String columnValue = row.getCell(j).toString();
+				rowJsonObject.put(columnName, columnValue);
+			}
+			list.add(rowJsonObject);
+		}
+		return list;
+	}
 	
 
 }
